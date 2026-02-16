@@ -1,1 +1,2 @@
 # Trading_Simulator
+Marcel
