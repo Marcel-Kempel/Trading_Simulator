@@ -11,3 +11,10 @@ Project is split into two apps:
 - `npm run build` -> builds frontend
 - `npm run api:dev` -> starts backend API
 - `npm run api:test` -> runs backend tests
+
+## Contributors
+
+- Marcel
+- Yash
+- moritz
+- sandra
