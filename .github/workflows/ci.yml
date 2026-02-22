@@ -1,30 +1,30 @@
-name: CI (frontend)
+name: CI (frontend) # Name des Workflows
 
-on:
-  pull_request:
-  push:
-    branches: [ main ]
+on:                 # Events, die den Workflow auslösen
+  pull_request:     # Bei jedem Pull Request
+  push:             # Und bei jedem Push
+    branches: [ main ] # ...aber nur auf den main-Branch
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build:                             # Job-Name: build
+    runs-on: ubuntu-latest           # Läuft auf einer Ubuntu-Linux-VM
     defaults:
       run:
-        working-directory: frontend
+        working-directory: frontend  # Standard-Arbeitsverzeichnis: ./frontend
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
+    steps:                           # Schritte, die im Job ausgeführt werden
+      - name: Checkout repo    
+        uses: actions/checkout@v5    # Repository-Code auschecken
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup Node             # Node.js-Umgebung einrichten
+        uses: actions/setup-node@v6  # Node.js Version 20 verwenden
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache: npm                 # npm-Cache aktivieren für schnellere Builds
+          cache-dependency-path: frontend/package-lock.json # Cache basiert auf dieser Lockfile
 
       - name: Install deps
-        run: npm ci
+        run: npm ci                  # Abhängigkeiten sauber nach package-lock installieren
 
       - name: Build
-        run: npm run build
+        run: npm run build           # Frontend-Build-Skript ausführen
