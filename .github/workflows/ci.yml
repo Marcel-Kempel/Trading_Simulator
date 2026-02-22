@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest           # Läuft auf einer Ubuntu-Linux-VM
     defaults:
       run:
-        working-directory: frontend  # Standard-Arbeitsverzeichnis: ./frontend
+        working-directory: frontend  # Standard-Arbeitsverzeichnis:./frontend
 
     steps:                           # Schritte, die im Job ausgeführt werden
       - name: Checkout repo    
