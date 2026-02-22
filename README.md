@@ -18,3 +18,4 @@ Project is split into two apps:
 - Yash
 - moritz
 - sandra
+- Justus
