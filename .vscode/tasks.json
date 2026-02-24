@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "backend-run",
+      "type": "shell",
+      "command": "./mvnw spring-boot:run",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "trading-sim"
+      }
+    },
+    {
+      "label": "backend-test",
+      "type": "shell",
+      "command": "./mvnw test",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "frontend-install",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "frontend-dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": [],
+      "dependsOn": "frontend-install",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "trading-sim"
+      }
+    },
+    {
+      "label": "Start Full Stack",
+      "dependsOn": ["backend-run", "frontend-dev"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
