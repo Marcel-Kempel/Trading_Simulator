@@ -6,14 +6,14 @@ import { defaultBrokerConfig } from "./config.js";
 import { ReplayMarketDataService } from "./server/market/ReplayMarketDataService.js";
 import { LiveMarketDataService } from "./server/market/LiveMarketDataService.js";
 import { BrokerService } from "./server/core/BrokerService.js";
-import express from "express";
 import usersRouter from "./dbCon.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function loadReplayDataset() {
-  const replayPath = path.join(__dirname, "data", "replay-quotes.json");
+  // Dataset is shipped under backend/server/data
+  const replayPath = path.join(__dirname, "server", "data", "replay-quotes.json");
   const raw = fs.readFileSync(replayPath, "utf8");
   return JSON.parse(raw);
 }
@@ -29,24 +29,20 @@ export function createBrokerService(config = defaultBrokerConfig) {
 }
 
 export function createServerApp() {
-  return createApp({ brokerService: createBrokerService() });
+  const app = createApp({ brokerService: createBrokerService() });
+
+  // User/auth endpoints (MariaDB)
+  app.use("/api", usersRouter);
+
+  return app;
 }
 
 if (process.env.NODE_ENV !== "test") {
   const app = createServerApp();
-  const port = Number(process.env.PORT ?? 8080);
+  // docker-compose maps 3000:3000
+  const port = Number(process.env.PORT ?? 3000);
+
   app.listen(port, () => {
-    // eslint-disable-next-line no-console
     console.log(`Broker API running on http://localhost:${port}`);
   });
 }
-
-
-const app = express();
-app.use(express.json());
-
-app.use("/api", usersRouter);
-
-app.listen(3000, () => {
-  console.log("Backend läuft auf Port 3000");
-});
