@@ -2,25 +2,51 @@ import express from "express";
 import mysql from "mysql2/promise";
 import bcrypt from "bcrypt";
 
+/**
+ * User/Auth router.
+ *
+ * IMPORTANT:
+ * - docker-compose does NOT wait for MariaDB to be "ready".
+ * - if we crash on first connection attempt, the container will restart-loop.
+ * So we connect with retries and only start serving DB-backed routes once ready.
+ */
+
 const router = express.Router();
 
-/* ================================
-   Datenbank-Verbindung
-================================ */
-const db = mysql.createPool({
-    host: process.env.DB_HOST,      // db
-    user: process.env.DB_USER,      // appuser
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,  // appdb
+function getDbConfig() {
+  return {
+    host: process.env.DB_HOST || "db",
+    user: process.env.DB_USER || "appuser",
+    password: process.env.DB_PASSWORD || "apppass",
+    database: process.env.DB_NAME || "appdb",
     waitForConnections: true,
-    connectionLimit: 10
-});
+    connectionLimit: 10,
+  };
+}
 
-/* ================================
-   Tabelle sicherstellen (optional)
-================================ */
-async function initDB() {
-    await db.execute(`
+const pool = mysql.createPool(getDbConfig());
+
+async function sleep(ms) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+async function waitForDbReady({ attempts = 30, delayMs = 1000 } = {}) {
+  let lastError;
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      await pool.query("SELECT 1");
+      return;
+    } catch (err) {
+      lastError = err;
+      console.warn(`DB not ready (attempt ${i}/${attempts}) -> ${err?.code || err?.message}`);
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
+async function ensureSchema() {
+  await pool.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(100) NOT NULL,
@@ -28,103 +54,108 @@ async function initDB() {
       email VARCHAR(100) NOT NULL UNIQUE
     )
   `);
-    console.log("Users-Tabelle bereit");
 }
 
-initDB();
+let dbReady = false;
 
-/* ================================
-   USER ANLEGEN (POST)
-================================ */
-router.post("/users", async (req, res) => {
-    try {
-        const { name, password, email } = req.body;
+// fire-and-forget init; routes check dbReady and return 503 until ready
+(async () => {
+  try {
+    await waitForDbReady();
+    await ensureSchema();
+    dbReady = true;
+    console.log("DB ready and schema ensured");
+  } catch (err) {
+    console.error("DB init failed (backend will keep running):", err?.message || err);
+    dbReady = false;
+  }
+})();
 
-        if (!name || !password || !email) {
-            return res.status(400).json({ error: "Alle Felder sind Pflicht" });
-        }
+function requireDb(_req, res, next) {
+  if (!dbReady) {
+    return res.status(503).json({ error: "db_not_ready" });
+  }
+  return next();
+}
 
-        // Passwort hashen
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const [result] = await db.execute(
-            "INSERT INTO users (name, password, email) VALUES (?, ?, ?)",
-            [name, hashedPassword, email]
-        );
-
-        res.status(201).json({
-            message: "User erstellt",
-            id: result.insertId
-        });
-
-    } catch (err) {
-        if (err.code === "ER_DUP_ENTRY") {
-            return res.status(409).json({ error: "E-Mail existiert bereits" });
-        }
-        res.status(500).json({ error: "Serverfehler" });
-    }
+// small health endpoint for debugging
+router.get("/db/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ status: "UP" });
+  } catch (err) {
+    res.status(503).json({ status: "DOWN", error: err?.code || err?.message });
+  }
 });
 
-/* ================================
-   USER ABFRAGEN (GET)
-================================ */
-router.get("/users", async (req, res) => {
-    try {
-        const [rows] = await db.query(
-            "SELECT id, name, email FROM users"
-        );
+/* USER ANLEGEN */
+router.post("/users", requireDb, async (req, res) => {
+  try {
+    const { name, password, email } = req.body ?? {};
 
-        res.json(rows);
-
-    } catch (err) {
-        res.status(500).json({ error: "Serverfehler" });
+    if (!name || !password || !email) {
+      return res.status(400).json({ error: "missing_fields" });
     }
+
+    const hashedPassword = await bcrypt.hash(String(password), 10);
+
+    const [result] = await pool.execute(
+      "INSERT INTO users (name, password, email) VALUES (?, ?, ?)",
+      [String(name), hashedPassword, String(email)]
+    );
+
+    return res.status(201).json({ message: "user_created", id: result.insertId });
+  } catch (err) {
+    if (err?.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "email_exists" });
+    }
+    console.error("POST /users failed:", err);
+    return res.status(500).json({ error: "server_error" });
+  }
 });
 
-/* ================================
-   LOGIN (POST)
-================================ */
-router.post("/login", async (req, res) => {
-    try {
-        const { email, password } = req.body;
+/* USER LISTE */
+router.get("/users", requireDb, async (_req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT id, name, email FROM users ORDER BY id ASC");
+    return res.json(rows);
+  } catch (err) {
+    console.error("GET /users failed:", err);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
 
-        const [rows] = await db.execute(
-            "SELECT * FROM users WHERE email = ?",
-            [email]
-        );
-
-        if (rows.length === 0) {
-            return res.status(401).json({ error: "Ungültige Zugangsdaten" });
-        }
-
-        const user = rows[0];
-
-        const valid = await bcrypt.compare(password, user.password);
-        if (!valid) {
-            return res.status(401).json({ error: "Ungültige Zugangsdaten" });
-        }
-
-        res.json({
-            message: "Login erfolgreich",
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email
-            }
-        });
-
-    } catch (err) {
-        res.status(500).json({ error: "Serverfehler" });
+/* LOGIN */
+router.post("/login", requireDb, async (req, res) => {
+  try {
+    const { email, password } = req.body ?? {};
+    if (!email || !password) {
+      return res.status(400).json({ error: "missing_fields" });
     }
+
+    const [rows] = await pool.execute(
+      "SELECT id, name, email, password FROM users WHERE email = ?",
+      [String(email)]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(401).json({ error: "invalid_credentials" });
+    }
+
+    const user = rows[0];
+    const ok = await bcrypt.compare(String(password), String(user.password));
+    if (!ok) {
+      return res.status(401).json({ error: "invalid_credentials" });
+    }
+
+    return res.json({
+      message: "login_ok",
+      user: { id: user.id, name: user.name, email: user.email },
+    });
+  } catch (err) {
+    console.error("POST /login failed:", err);
+    return res.status(500).json({ error: "server_error" });
+  }
 });
 
 export default router;
-
-/* Ungetestet
-User anlegen: curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Justus","password":"1234","email":"justus@test.de"}'
-alle User holen: curl http://localhost:3000/api/users
-Login: curl -X POST http://localhost:3000/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"justus@test.de","password":"1234"}' */
