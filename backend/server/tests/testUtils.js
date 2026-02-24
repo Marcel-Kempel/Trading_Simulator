@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultBrokerConfig } from "../config.js";
+import { defaultBrokerConfig } from "../../config.js";
 import { ReplayMarketDataService } from "../market/ReplayMarketDataService.js";
 import { BrokerService } from "../core/BrokerService.js";
 

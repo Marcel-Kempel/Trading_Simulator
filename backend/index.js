@@ -3,9 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
 import { defaultBrokerConfig } from "./config.js";
-import { ReplayMarketDataService } from "./market/ReplayMarketDataService.js";
-import { LiveMarketDataService } from "./market/LiveMarketDataService.js";
-import { BrokerService } from "./core/BrokerService.js";
+import { ReplayMarketDataService } from "./server/market/ReplayMarketDataService.js";
+import { LiveMarketDataService } from "./server/market/LiveMarketDataService.js";
+import { BrokerService } from "./server/core/BrokerService.js";
+import express from "express";
+import usersRouter from "./dbCon.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,3 +40,13 @@ if (process.env.NODE_ENV !== "test") {
     console.log(`Broker API running on http://localhost:${port}`);
   });
 }
+
+
+const app = express();
+app.use(express.json());
+
+app.use("/api", usersRouter);
+
+app.listen(3000, () => {
+  console.log("Backend läuft auf Port 3000");
+});
