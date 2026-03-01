@@ -1,13 +1,49 @@
 # Infrastructure Quickstart (k3d + Helm + Argo CD)
 
-## Why this setup
+### Why this setup
 - Current repo stack is `Node backend + React/Vite frontend + MariaDB` (see `backend/package.json`, `frontend/package.json`, `docker-compose.yml`).
 - This setup keeps DB flexible: deploy internal DB for local demo, or switch to external DB only by changing Helm values.
 
-## Local tool choice
+### Local tool choice
 Use **k3d** (recommended for beginners):
 - It runs Kubernetes inside Docker, so it is fast and light.
 - Traefik is included by default in k3s/k3d (no extra ingress controller install needed).
+
+
+
+ 
+## Precheck) Compose-Basistest (vor Kubernetes)
+Run this first to verify that frontend/backend/db work in Docker Compose.
+
+```bash
+docker compose build
+docker compose up -d
+docker compose ps
+curl http://localhost:3000/api/db/health
+```
+```bash
+docker compose down
+```
+
+Expected:
+- containers are `Up` in `docker compose ps`
+- health endpoint returns `status: UP` (or similar JSON)
+
+
+
+## 0) install kubectl helm und k3d
+on mac
+```bash
+brew install kubectl helm k3d
+```
+Check:
+```bash
+kubectl version --client
+helm version
+k3d version
+docker --version
+```
+
 
 ## 1) Create local cluster
 ```bash
@@ -27,6 +63,10 @@ You should see one server and one agent as `Ready`.
 Add to `/etc/hosts`:
 ```txt
 127.0.0.1 trading.localhost
+```
+**das hat auf mac geklappt (nicht das obere)**
+```bash
+echo "127.0.0.1 trading.localhost" | sudo tee -a /etc/hosts
 ```
 
 Check:
@@ -82,6 +122,44 @@ Check:
 kubectl get applications -n argocd
 ```
 App `trading-simulator` should become `Synced` and `Healthy`.
+oft noch leer. nochmalnach 10-30 sekunden versuchen
+
+Jetzt sollte es laufen.
+
+## Test
+```bash
+kubectl get pods -n trading
+```
+```bash
+kubectl get applications -n argocd
+```
+```bash
+curl http://trading.localhost/api/db/health
+```
+```txt
+Browser: http://trading.localhost/
+```
+
+# 7) Manual failover test (pod crash simulation)
+Delete one backend pod on purpose:
+```bash
+kubectl delete pod -n trading -l app.kubernetes.io/component=backend
+```
+
+Watch pod recreation:
+```bash
+kubectl get pods -n trading -w
+```
+Stop watch with `Ctrl + C` once the new backend pod is `Running`.
+
+Check recent events:
+```bash
+kubectl get events -n trading --sort-by=.lastTimestamp | tail -n 20
+```
+You should see termination/recreation events for the backend pod.
+
+
+
 
 ## Switch to external DB later
 In Helm values:
