@@ -1,0 +1,6 @@
+apiVersion: v2
+name: trading-simulator
+description: Helm chart for Trading Simulator frontend/backend and optional MariaDB
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

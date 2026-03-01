@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trading-simulator
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Marcel-Kempel/Trading_Simulator.git
+    targetRevision: Docker
+    path: infra/helm/trading-simulator
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-local.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: trading
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

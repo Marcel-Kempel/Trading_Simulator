@@ -1,0 +1,18 @@
+{{- if .Values.internalDatabase.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "trading-simulator.fullname" . }}-mariadb
+  labels:
+    {{- include "trading-simulator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.internalDatabase.storage.size }}
+  {{- if .Values.internalDatabase.storage.storageClassName }}
+  storageClassName: {{ .Values.internalDatabase.storage.storageClassName }}
+  {{- end }}
+{{- end }}

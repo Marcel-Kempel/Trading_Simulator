@@ -1,0 +1,18 @@
+{{- if .Values.internalDatabase.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "trading-simulator.fullname" . }}-mariadb
+  labels:
+    {{- include "trading-simulator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  selector:
+    {{- include "trading-simulator.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+  ports:
+    - port: {{ .Values.internalDatabase.service.port }}
+      targetPort: mysql
+      protocol: TCP
+      name: mysql
+{{- end }}

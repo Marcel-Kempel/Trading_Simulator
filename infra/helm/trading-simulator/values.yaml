@@ -1,0 +1,73 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+frontend:
+  enabled: true 
+  replicaCount: 1 # Number of replicas for the frontend deployment
+  image:
+    repository: ghcr.io/marcel-kempel/trading_simulator/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5173
+  containerPort: 5173
+  env: []
+
+backend:
+  enabled: true
+  replicaCount: 1 # Number of replicas for the backend deployment
+  image:
+    repository: ghcr.io/marcel-kempel/trading_simulator/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  containerPort: 3000
+  env:
+    MARKET_DATA_MODE: replay
+    ENABLE_LIVE_MARKET_DATA: "false"
+    PORT: "3000"
+
+# Keep DB deploy optional to avoid lock-in while stack/hosting may still change.
+internalDatabase:
+  enabled: true
+  image:
+    repository: mariadb
+    tag: "11"
+    pullPolicy: IfNotPresent
+  service:
+    port: 3306
+  storage:
+    size: 1Gi
+    storageClassName: ""
+  credentials:
+    mysqlRootPassword: rootpassword
+    mysqlDatabase: appdb
+    mysqlUser: appuser
+    mysqlPassword: secret
+
+database:
+  # If internalDatabase.enabled=false, set host to external DB endpoint.
+  host: ""
+  port: "3306"
+  name: appdb
+  user: appuser
+  password: secret
+
+ingress:
+  enabled: true
+  className: traefik
+  host: trading.localhost
+  annotations: {}
+  paths:
+    frontend: /
+    backendApi: /api
+
+resources:
+  frontend: {}
+  backend: {}
+  database: {}

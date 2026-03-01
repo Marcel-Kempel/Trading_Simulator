@@ -1,0 +1,53 @@
+{{- if .Values.backend.enabled }} # Only create backend deployment if enabled in values.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trading-simulator.fullname" . }}-backend
+  labels:
+    {{- include "trading-simulator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }} # Number of replicas for the backend deployment
+  selector:
+    matchLabels:
+      {{- include "trading-simulator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "trading-simulator.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.backend.containerPort }}
+              name: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "trading-simulator.fullname" . }}-config
+            - secretRef:
+                name: {{ include "trading-simulator.fullname" . }}-db
+          readinessProbe:
+            httpGet:
+              path: /api/db/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /api/db/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            {{- toYaml .Values.resources.backend | nindent 12 }}
+{{- end }}

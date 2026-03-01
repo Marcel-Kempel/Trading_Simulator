@@ -1,0 +1,17 @@
+frontend:
+  image:
+    repository: ghcr.io/marcel-kempel/trading_simulator/frontend
+    tag: latest
+
+backend:
+  image:
+    repository: ghcr.io/marcel-kempel/trading_simulator/backend
+    tag: latest
+
+internalDatabase:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: traefik
+  host: trading.localhost

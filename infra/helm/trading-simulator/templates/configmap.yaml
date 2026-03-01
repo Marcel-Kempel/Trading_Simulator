@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "trading-simulator.fullname" . }}-config
+  labels:
+    {{- include "trading-simulator.labels" . | nindent 4 }}
+data:
+  DB_HOST: {{ ternary (printf "%s-mariadb" (include "trading-simulator.fullname" .)) .Values.database.host .Values.internalDatabase.enabled | quote }}
+  DB_PORT: {{ .Values.database.port | quote }}
+  PORT: {{ .Values.backend.env.PORT | quote }}
+  MARKET_DATA_MODE: {{ .Values.backend.env.MARKET_DATA_MODE | quote }}
+  ENABLE_LIVE_MARKET_DATA: {{ .Values.backend.env.ENABLE_LIVE_MARKET_DATA | quote }}

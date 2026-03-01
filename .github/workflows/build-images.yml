@@ -1,0 +1,58 @@
+# This workflow builds and pushes Docker images for both the backend and frontend 
+# components of the Trading Simulator application to GitHub Container Registry (GHCR) 
+# whenever changes are pushed to the main or Docker branches, or when manually triggered.
+
+name: Build and Push Images
+
+on:
+  push:
+    branches:
+      - main
+      - Docker
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: backend
+            context: ./backend
+            image: ghcr.io/${{ github.repository_owner }}/trading_simulator/backend
+          - name: frontend
+            context: ./frontend
+            image: ghcr.io/${{ github.repository_owner }}/trading_simulator/frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+            type=ref,event=branch
+
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
