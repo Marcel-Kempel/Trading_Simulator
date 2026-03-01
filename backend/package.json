@@ -1,8 +1,19 @@
 {
-    "type": "module",
+  "name": "trading-simulator-backend",
+  "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev": "node index.js",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "express": "^5.2.1",
+    "mysql2": "^3.15.3"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2",
+    "vitest": "^4.0.18"
   }
 }
