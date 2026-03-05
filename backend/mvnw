@@ -1,0 +1,42 @@
+#!/bin/sh
+# Maven Wrapper script — auto-downloads Maven if not installed
+# https://maven.apache.org/wrapper/
+
+set -e
+
+MAVEN_PROJECTBASEDIR="${MAVEN_BASEDIR:-$(cd "$(dirname "$0")" && pwd)}"
+MAVEN_WRAPPER_JAR="$MAVEN_PROJECTBASEDIR/.mvn/wrapper/maven-wrapper.jar"
+MAVEN_WRAPPER_PROPERTIES="$MAVEN_PROJECTBASEDIR/.mvn/wrapper/maven-wrapper.properties"
+
+if [ -r "$MAVEN_WRAPPER_PROPERTIES" ]; then
+    MAVEN_URL=$(grep 'distributionUrl' "$MAVEN_WRAPPER_PROPERTIES" | cut -d'=' -f2-)
+fi
+
+MAVEN_HOME="${MAVEN_HOME:-$HOME/.m2/wrapper/dists}"
+MAVEN_VERSION=$(echo "$MAVEN_URL" | sed 's|.*/apache-maven-\([0-9.]*\)-.*|\1|')
+MAVEN_DIR="$MAVEN_HOME/apache-maven-$MAVEN_VERSION"
+MAVEN_CMD="$MAVEN_DIR/bin/mvn"
+
+if [ ! -x "$MAVEN_CMD" ]; then
+    echo "Downloading Maven $MAVEN_VERSION..."
+    mkdir -p "$MAVEN_HOME"
+    TMPFILE=$(mktemp /tmp/maven-XXXXXX.zip)
+
+    if command -v curl > /dev/null 2>&1; then
+        curl -fsSL -o "$TMPFILE" "$MAVEN_URL"
+    elif command -v wget > /dev/null 2>&1; then
+        wget -q -O "$TMPFILE" "$MAVEN_URL"
+    else
+        echo "Error: curl or wget required to download Maven" >&2
+        exit 1
+    fi
+
+    unzip -qo "$TMPFILE" -d "$MAVEN_HOME"
+    rm -f "$TMPFILE"
+    chmod +x "$MAVEN_CMD"
+    echo "Maven $MAVEN_VERSION installed to $MAVEN_DIR"
+fi
+
+exec "$MAVEN_CMD" \
+    -Dmaven.multiModuleProjectDirectory="$MAVEN_PROJECTBASEDIR" \
+    "$@"

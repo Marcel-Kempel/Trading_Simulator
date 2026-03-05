@@ -1,0 +1,269 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# CI/CD Pipeline für TradeSimX (Trading Simulator)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Diese Pipeline automatisiert den gesamten Build-, Test- und Deployment-Prozess.
+# Sie wird bei jedem Push oder Pull Request automatisch von GitHub ausgeführt.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: CI/CD Pipeline
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRIGGER: Wann soll die Pipeline laufen?
+# ─────────────────────────────────────────────────────────────────────────────
+# - Bei jedem Push auf main, master oder claude/** Branches
+# - Bei jedem Pull Request gegen main oder master
+# So wird sichergestellt, dass kein fehlerhafter Code in den Hauptbranch gelangt.
+on:
+  push:
+    branches:
+      - main
+      - master
+      - "claude/**"
+  pull_request:
+    branches:
+      - main
+      - master
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOBS: Die einzelnen Aufgaben der Pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+# Die Pipeline besteht aus 3 Jobs:
+#   1. backend-ci  → Backend kompilieren und testen
+#   2. frontend-ci → Frontend type-checken und bauen
+#   3. deploy      → Artefakte bereitstellen (nur auf main/master)
+#
+# backend-ci und frontend-ci laufen PARALLEL (spart Zeit).
+# deploy läuft erst NACHDEM beide erfolgreich waren.
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 1: BACKEND – Build & Test (Spring Boot / Java 17)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Dieser Job:
+  #   - Startet eine MariaDB-Testdatenbank als Service-Container
+  #   - Initialisiert die DB mit init.sql (Users-Tabelle + Testdaten)
+  #   - Kompiliert das Spring Boot Backend mit Maven
+  #   - Führt alle Unit- und Integrationstests aus
+  #   - Speichert das fertige JAR als Artefakt für den Deploy-Job
+  # ═══════════════════════════════════════════════════════════════════════════
+  backend-ci:
+    name: Backend – Build & Test (Spring Boot / Java 17)
+    runs-on: ubuntu-latest    # Läuft auf einer frischen Ubuntu-VM bei GitHub
+
+    # ── MariaDB Service-Container ──────────────────────────────────────────
+    # GitHub Actions kann Docker-Container als Services starten.
+    # Hier wird eine MariaDB-Instanz gestartet, die identisch zu unserer
+    # docker-compose.yml konfiguriert ist (gleiche DB, User, Passwort).
+    # Der Healthcheck stellt sicher, dass die DB bereit ist bevor Tests laufen.
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root        # Root-Passwort der DB
+          MARIADB_DATABASE: demo_db          # Datenbank wird automatisch erstellt
+          MARIADB_USER: demo_user            # Benutzer für die Anwendung
+          MARIADB_PASSWORD: demo_pass        # Passwort für den Benutzer
+        ports:
+          - 3306:3306                        # DB ist auf localhost:3306 erreichbar
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    # Alle run-Befehle in diesem Job starten im backend/ Verzeichnis
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      # ── Schritt 1: Code auschecken ────────────────────────────────────────
+      # Klont das GitHub Repository in die VM
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Schritt 2: Datenbank initialisieren ───────────────────────────────
+      # Führt init.sql aus um die users-Tabelle und Testdaten anzulegen.
+      # Ohne diesen Schritt würden die Tests fehlschlagen, weil die Tabelle fehlt.
+      # working-directory wird auf Root gesetzt, weil init.sql im Projektroot liegt.
+      - name: Initialize database
+        working-directory: .
+        run: mariadb -h 127.0.0.1 -u demo_user -pdemo_pass demo_db < init.sql
+
+      # ── Schritt 3: Java 17 installieren ───────────────────────────────────
+      # Installiert die Temurin JDK 17 Distribution (Open-Source Java).
+      # cache: maven speichert heruntergeladene Dependencies zwischen Runs,
+      # damit die Pipeline beim nächsten Mal schneller ist.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      # ── Schritt 4: Maven Wrapper ausführbar machen ────────────────────────
+      # Unter Linux braucht das mvnw-Script Execute-Permissions.
+      # Ohne chmod würde der Build mit "Permission denied" fehlschlagen.
+      - name: Make mvnw executable
+        run: chmod +x mvnw
+
+      # ── Schritt 5: Bauen und Testen ───────────────────────────────────────
+      # ./mvnw verify führt den kompletten Maven-Lifecycle aus:
+      #   compile → test → package → verify
+      # Die Environment-Variablen überschreiben application.properties,
+      # damit Spring Boot die CI-Datenbank (localhost:3306) nutzt
+      # statt mariadb_init:3306 aus dem Docker-Netzwerk.
+      - name: Build and run tests
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mariadb://127.0.0.1:3306/demo_db
+          SPRING_DATASOURCE_USERNAME: demo_user
+          SPRING_DATASOURCE_PASSWORD: demo_pass
+          SPRING_JPA_HIBERNATE_DDL_AUTO: update
+        run: ./mvnw --no-transfer-progress verify
+
+      # ── Schritt 6: Test-Reports hochladen ─────────────────────────────────
+      # Lädt die Surefire-Test-Reports als Artefakt hoch.
+      # if: always() bedeutet: auch wenn Tests fehlschlagen werden Reports gespeichert.
+      # So kann man im GitHub Actions Tab nachschauen welche Tests fehlgeschlagen sind.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: backend/target/surefire-reports/
+
+      # ── Schritt 7: JAR-Datei hochladen ────────────────────────────────────
+      # Das fertige JAR (z.B. app-1.0.0.jar) wird als Artefakt gespeichert.
+      # Nur auf main/master – bei Feature-Branches wird nur getestet.
+      # retention-days: 7 bedeutet das Artefakt wird nach 7 Tagen gelöscht.
+      - name: Upload backend JAR
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/*.jar
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2: FRONTEND – Type-check & Build (React / TypeScript)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Dieser Job:
+  #   - Installiert Node.js und alle npm-Dependencies
+  #   - Prüft TypeScript-Typen (findet Fehler ohne die App zu starten)
+  #   - Baut die Produktions-Version mit Vite (optimiert, minified)
+  #   - Speichert den dist/-Ordner als Artefakt für den Deploy-Job
+  # ═══════════════════════════════════════════════════════════════════════════
+  frontend-ci:
+    name: Frontend – Type-check & Build (React / TypeScript)
+    runs-on: ubuntu-latest
+
+    # Alle run-Befehle starten im frontend/ Verzeichnis
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      # ── Schritt 1: Code auschecken ────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Schritt 2: Node.js 20 installieren ────────────────────────────────
+      # cache: npm cached die node_modules zwischen Runs für schnellere Builds.
+      # cache-dependency-path zeigt auf package-lock.json damit der Cache
+      # nur invalidiert wird wenn sich Dependencies ändern.
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # ── Schritt 3: Dependencies installieren ──────────────────────────────
+      # npm ci ist wie npm install, aber:
+      #   - Nutzt exakt die Versionen aus package-lock.json
+      #   - Löscht vorher node_modules komplett
+      #   - Ist schneller und reproduzierbarer → ideal für CI
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Schritt 4: TypeScript Type-Check ──────────────────────────────────
+      # Prüft alle .ts/.tsx Dateien auf Typfehler OHNE zu kompilieren.
+      # --noEmit: Erzeugt keine Output-Dateien, nur Fehlerprüfung
+      # --skipLibCheck: Überspringt Typprüfung in node_modules
+      #                 (verhindert Fehler durch inkompatible Library-Typen)
+      - name: TypeScript type-check
+        run: npx tsc --noEmit --skipLibCheck
+
+      # ── Schritt 5: Produktions-Build ──────────────────────────────────────
+      # Vite baut die React-App für Produktion:
+      #   - Bundelt alle JS/CSS Dateien
+      #   - Minifiziert den Code (kleinere Dateigröße)
+      #   - Erzeugt den dist/ Ordner mit allen statischen Dateien
+      - name: Build
+        run: npm run build
+
+      # ── Schritt 6: Build-Artefakt hochladen ───────────────────────────────
+      # Der dist/ Ordner enthält die fertige Website (HTML, JS, CSS).
+      # Wird nur auf main/master hochgeladen für den Deploy-Job.
+      - name: Upload frontend dist
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3: DEPLOY – Bereitstellung (nur auf main/master)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Dieser Job:
+  #   - Läuft NUR wenn backend-ci UND frontend-ci erfolgreich waren (needs)
+  #   - Läuft NUR auf main/master Branch (nicht auf Feature-Branches)
+  #   - Lädt die Artefakte (JAR + dist/) herunter
+  #   - Stellt sie zur Deployment bereit
+  #
+  # In einer echten Produktionsumgebung würde hier z.B. stehen:
+  #   - SSH auf den Server und JAR deployen
+  #   - Docker Image bauen und in eine Registry pushen
+  #   - Kubernetes/ArgoCD Deployment auslösen
+  # ═══════════════════════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy
+    needs: [backend-ci, frontend-ci]     # Wartet auf beide CI-Jobs
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment: production              # GitHub Environment für Secrets/Approvals
+
+    steps:
+      # ── Schritt 1: Backend-Artefakt herunterladen ─────────────────────────
+      # Lädt das JAR aus Job 1 herunter
+      - name: Download backend JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: artifacts/backend
+
+      # ── Schritt 2: Frontend-Artefakt herunterladen ────────────────────────
+      # Lädt den dist/-Ordner aus Job 2 herunter
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: artifacts/frontend
+
+      # ── Schritt 3: Deployment durchführen ─────────────────────────────────
+      # Aktuell nur Platzhalter – zeigt die verfügbaren Artefakte.
+      # In Produktion würde man hier die Dateien auf den Server kopieren.
+      - name: Deploy
+        run: |
+          echo "========================================="
+          echo "  Deployment-Artefakte bereit"
+          echo "========================================="
+          echo "Backend JAR:    $(ls artifacts/backend/)"
+          echo "Frontend dist:  $(ls artifacts/frontend/ | head -5)"
+          echo ""
+          echo "Deployment-Schritte (Beispiel):"
+          echo "  scp artifacts/backend/*.jar user@host:/opt/tradex/"
+          echo "  rsync -av artifacts/frontend/ user@host:/var/www/tradex/"
+          echo "  ssh user@host 'systemctl restart tradex'"

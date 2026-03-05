@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Backend: Spring Boot",
+      "request": "launch",
+      "mainClass": "com.tradex.TradingSimulatorApplication",
+      "projectName": "trading-simulator-backend",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "type": "chrome",
+      "name": "Frontend: Chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src",
+      "preLaunchTask": "frontend-dev"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack (Backend + Frontend)",
+      "configurations": ["Backend: Spring Boot", "Frontend: Chrome"]
+    }
+  ]
+}

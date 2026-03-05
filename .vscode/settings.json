@@ -1,0 +1,20 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.project.sourcePaths": [
+    "backend/src/main/java",
+    "backend/src/test/java"
+  ],
+  "java.project.referencedLibraries": ["backend/target/**/*.jar"],
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "[java]": {
+    "editor.tabSize": 4
+  },
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/target": true,
+    "**/.git": true
+  },
+  "java.compile.nullAnalysis.mode": "automatic"
+}
