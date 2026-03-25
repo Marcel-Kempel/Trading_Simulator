@@ -1,25 +1,30 @@
-# dependencies
+# Node
 node_modules/
-**/node_modules/
-
-# build artifacts
 dist/
-**/dist/
-
-# logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# local env files
 .env
-.env.*
-!.env.example
+.env.local
 
-# editor/system files
-.vscode/
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.log
+.settings/
+.project
+.classpath
+
+# IDE
 .idea/
+*.iml
+*.iws
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Vite
+*.local

@@ -1,0 +1,52 @@
+services:
+  mariadb_init:
+    image: mariadb:11
+    container_name: mariadb_init
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: demo_db
+      MARIADB_USER: demo_user
+      MARIADB_PASSWORD: demo_pass
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-udemo_user", "-pdemo_pass", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  mariadb_persistent:
+    image: mariadb:11
+    container_name: mariadb_persistent
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: prod_db
+      MARIADB_USER: prod_user
+      MARIADB_PASSWORD: prod_pass
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "3308:3306"
+  backend:
+    build:
+      context: ./backend
+    container_name: backend
+    depends_on:
+      mariadb_init:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  mariadb_data:
