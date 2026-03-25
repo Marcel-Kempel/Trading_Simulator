@@ -121,6 +121,15 @@ jobs:
           SPRING_JPA_HIBERNATE_DDL_AUTO: update
         run: ./mvnw --no-transfer-progress verify
 
+        # ── Schritt 5b: SonarCloud Analyse ───────────────────────────────────
+      # Statische Codeanalyse mit SonarCloud.
+      # Prüft Code-Qualität, Security Hotspots und Test-Coverage.
+      # Der SONAR_TOKEN wird als GitHub Secret hinterlegt.
+      - name: SonarCloud Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./mvnw --no-transfer-progress sonar:sonar -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ secrets.SONAR_TOKEN }} -Dsonar.projectKey=trading_simulator_v2 -Dsonar.organization=moritzkopsch
+
       # ── Schritt 6: Test-Reports hochladen ─────────────────────────────────
       # Lädt die Surefire-Test-Reports als Artefakt hoch.
       # if: always() bedeutet: auch wenn Tests fehlschlagen werden Reports gespeichert.
