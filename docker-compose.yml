@@ -1,52 +1,135 @@
+# =========================================================
+# Docker Compose Setup
+# =========================================================
+# Dieses Setup besteht aus:
+# - 2 Datenbanken:
+#   1. mariadb_init → für initiale Tests (ohne persistente Daten)
+#   2. mariadb_persistent → mit persistentem Volume
+# - Backend (z.B. Spring Boot)
+# - Frontend (z.B. Vite/React)
+#
+# Besonderheit:
+# Beide DBs nutzen init.sql, aber nur die persistente DB
+# speichert Daten dauerhaft.
+# =========================================================
+
 services:
+
+  # =========================================================
+  # DATABASE (INIT / TEMPORÄR)
+  # =========================================================
+  # Diese Datenbank ist für Tests gedacht.
+  # - Läuft ohne persistentes Volume
+  # - Wird bei jedem Neustart neu initialisiert
+  # - Führt automatisch init.sql aus
+  # =========================================================
   mariadb_init:
     image: mariadb:11
     container_name: mariadb_init
+
+    # Zugangsdaten und initiale DB-Konfiguration
     environment:
       MARIADB_ROOT_PASSWORD: rootpass
       MARIADB_DATABASE: demo_db
       MARIADB_USER: demo_user
       MARIADB_PASSWORD: demo_pass
+
+    # Init-Skript wird beim Start ausgeführt
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    # Port-Mapping (Host:Container)
     ports:
       - "3307:3306"
+
+    # Healthcheck prüft, ob DB bereit ist
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-udemo_user", "-pdemo_pass", "--silent"]
+      test: [ "CMD", "mariadb-admin", "ping", "-h", "localhost", "-udemo_user", "-pdemo_pass", "--silent" ]
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # =========================================================
+  # DATABASE (PERSISTENT / PRODUKTION)
+  # =========================================================
+  # Diese Datenbank speichert Daten dauerhaft:
+  # - Nutzt ein Docker Volume
+  # - Daten bleiben auch nach Neustart erhalten
+  #
+  # WICHTIG:
+  # init.sql wird nur beim ERSTEN Start ausgeführt!
+  # =========================================================
   mariadb_persistent:
     image: mariadb:11
     container_name: mariadb_persistent
+
+    # Zugangsdaten und initiale DB-Konfiguration
     environment:
       MARIADB_ROOT_PASSWORD: rootpass
       MARIADB_DATABASE: prod_db
       MARIADB_USER: prod_user
       MARIADB_PASSWORD: prod_pass
+
+    # Init-Skript wird beim Start ausgeführt
     volumes:
+      # Persistente Speicherung der DB-Daten
       - mariadb_data:/var/lib/mysql
+
+      # Init-Skript (nur beim ersten Start aktiv)
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    # Port-Mapping (Host:Container)
     ports:
       - "3308:3306"
+
+  # =========================================================
+  # BACKEND SERVICE
+  # =========================================================
+  # Startverhalten:
+  # - Wartet auf mariadb_init (inkl. Healthcheck!)
+  # - Nutzt "docker" Profil
+  # =========================================================
   backend:
     build:
       context: ./backend
     container_name: backend
+
+    # Benötigt zum Hochfahren die angegebene depends
     depends_on:
       mariadb_init:
         condition: service_healthy
+
+    # Port-Mapping (Host:Container)
     ports:
       - "8080:8080"
+
+    # Zugangsdaten und initiale DB-Konfiguration
     environment:
+      # Aktiviert das Docker-Profil (z.B. DB-Konfig)
       SPRING_PROFILES_ACTIVE: docker
+
+  # =========================================================
+  # FRONTEND SERVICE
+  # =========================================================
+  # - Läuft im Dev-Modus
+  # - Greift auf Backend zu
+  # =========================================================
   frontend:
     build: ./frontend
     container_name: frontend
+
+    # Port-Mapping (Host:Container)
     ports:
       - "5173:5173"
+
+    # Benötigt zum Hochfahren die angegebene depends
     depends_on:
       - backend
 
+# =========================================================
+# VOLUMES
+# =========================================================
+# Named Volume für persistente Datenbank
+# =========================================================
 volumes:
   mariadb_data:
