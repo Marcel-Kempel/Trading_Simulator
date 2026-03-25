@@ -128,7 +128,7 @@ jobs:
       - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./mvnw --no-transfer-progress sonar:sonar -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ secrets.SONAR_TOKEN }} -Dsonar.projectKey=trading_simulator_v2 -Dsonar.organization=moritzkopsch
+        run: ./mvnw --no-transfer-progress sonar:sonar -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ secrets.SONAR_TOKEN }} -Dsonar.projectKey=Trading_Simulator -Dsonar.organization=moritzkopsch
 
       # ── Schritt 6: Test-Reports hochladen ─────────────────────────────────
       # Lädt die Surefire-Test-Reports als Artefakt hoch.
