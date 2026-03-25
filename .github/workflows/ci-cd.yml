@@ -121,6 +121,7 @@ jobs:
           SPRING_JPA_HIBERNATE_DDL_AUTO: update
         run: ./mvnw --no-transfer-progress verify
 
+
       # ── Schritt 6: Test-Reports hochladen ─────────────────────────────────
       # Lädt die Surefire-Test-Reports als Artefakt hoch.
       # if: always() bedeutet: auch wenn Tests fehlschlagen werden Reports gespeichert.
