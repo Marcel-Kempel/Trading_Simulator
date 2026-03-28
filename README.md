@@ -1,196 +1,156 @@
-# Trading Simulator
+# TradeSimX – Trading Simulator
 
-Full-stack paper trading simulator — **Spring Boot 3.4** REST API + **React + TypeScript** frontend.
+Full-Stack Paper-Trading-Simulator mit **Spring Boot 3.4** REST API, **React + TypeScript** Frontend und vollständiger **DevOps-Pipeline**.
 
-## Prerequisites
+## Tech Stack
 
-- **Java 17+** — [download](https://adoptium.net/)
-- **Maven 3.9+** — [download](https://maven.apache.org/download.cgi) (or use the included `mvnw` wrapper)
-- **Node.js 18+** — [download](https://nodejs.org/)
+| Bereich | Technologien |
+|---------|-------------|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| Backend | Spring Boot 3.4, Java 17, Maven, JPA/Hibernate |
+| Datenbank | MariaDB 11 (lokal), MySQL 8.0 (Cloud) |
+| Infrastruktur | Docker Compose, Google Cloud Run, Cloud SQL |
+| CI/CD | GitHub Actions (3-Job-Pipeline) |
+| Code-Qualität | SonarCloud (Automatic Analysis) |
 
-## Running in VS Code
+## Schnellstart
 
-### Step 1: Open the project
+### Option 1: Docker Compose (empfohlen)
 
-Open the `trading-simulator` folder in VS Code:
-
+```bash
+git clone https://github.com/Marcel-Kempel/Trading_Simulator.git
+cd Trading_Simulator
+docker compose up
 ```
-File → Open Folder → select trading-simulator/
-```
 
-VS Code will prompt you to install recommended extensions — click **Install All**.
-The key extensions are:
-- **Extension Pack for Java** (Red Hat)
-- **Spring Boot Extension Pack** (VMware)
+Die App startet 4 Container:
 
-### Step 2: Start the backend (Terminal 1)
+| Container | Beschreibung | Port |
+|-----------|-------------|------|
+| `mariadb_init` | Entwicklungs-Datenbank | 3307 |
+| `mariadb_persistent` | Persistente Datenbank | 3308 |
+| `backend` | Spring Boot REST API | 8080 |
+| `frontend` | Vite Dev Server | 5173 |
 
-Open a terminal in VS Code (`Ctrl+`` ` or `Terminal → New Terminal`):
+Öffne **http://localhost:5173** im Browser.
 
+### Option 2: Manuell mit VS Code
+
+**Terminal 1 – Backend:**
 ```bash
 cd backend
 ./mvnw spring-boot:run
 ```
 
-On **Windows** use:
-```cmd
-cd backend
-mvnw.cmd spring-boot:run
-```
-
-Wait until you see:
-```
-Broker API running → Started TradingSimulatorApplication on port 8080
-```
-
-### Step 3: Start the frontend (Terminal 2)
-
-Open a **second** terminal (`+` button in the terminal panel):
-
+**Terminal 2 – Frontend:**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Wait until you see:
-```
-VITE v6.x  ready in xxx ms
-➜  Local: http://localhost:5173/
-```
+## Cloud Deployment
 
-### Step 4: Use the app
+Die Anwendung läuft produktiv auf **Google Cloud Run**:
 
-Open **http://localhost:5173** in your browser. That's it!
+| Service | URL |
+|---------|-----|
+| Frontend | https://tradesimx-frontend-720693733401.europe-west10.run.app |
+| Backend | https://tradesimx-backend-720693733401.europe-west10.run.app |
 
-### Alternative: Use VS Code Tasks
-
-Press `Ctrl+Shift+B` (or `Cmd+Shift+B` on Mac) to run the **Start Full Stack** task, which launches both backend and frontend in parallel.
-
----
-
-## Project Structure
+### Architektur
 
 ```
-trading-simulator/
-├── .vscode/                          VS Code workspace config
-│   ├── launch.json                   Debug configurations
-│   ├── tasks.json                    Build/run tasks
-│   ├── settings.json                 Workspace settings
-│   └── extensions.json               Recommended extensions
-│
-├── backend/                          Spring Boot 3.4 + Java 17
-│   ├── pom.xml                       Maven build file
-│   ├── mvnw / mvnw.cmd              Maven wrapper scripts
-│   ├── .mvn/wrapper/                 Maven wrapper config
+Browser → Frontend (Cloud Run, Nginx) → Backend (Cloud Run, Spring Boot) → Cloud SQL (MySQL 8.0)
+                                         ↕ Cloud SQL Proxy (Unix Socket)
+```
+
+- **Frontend:** Nginx serviert statische Dateien und leitet `/api/*` an das Backend weiter
+- **Backend:** Spring Boot verbindet sich über Cloud SQL Proxy zur Datenbank
+- **Datenbank:** Cloud SQL MySQL 8.0 in `europe-west10` (Berlin)
+
+## CI/CD Pipeline
+
+Die Pipeline wird bei jedem Push und Pull Request automatisch ausgeführt:
+
+```
+Push/PR → Backend CI ──┐
+                       ├──→ Deploy (nur auf main)
+Push/PR → Frontend CI ─┘
+```
+
+**Job 1 – Backend CI:** MariaDB Service-Container, Java 17, Maven Build + Tests
+**Job 2 – Frontend CI:** Node.js 20, TypeScript Type-Check, Vite Build
+**Job 3 – Deploy:** Docker Images bauen, in Artifact Registry pushen, auf Cloud Run deployen
+
+- Backend und Frontend CI laufen **parallel**
+- Deploy läuft **nur auf main** und erst nach erfolgreichem CI
+- Authentifizierung bei Google Cloud via **Workload Identity Federation**
+
+## Qualitätssicherung
+
+**SonarCloud** analysiert den Code automatisch bei jedem Push:
+
+- Statische Codeanalyse (Bugs, Code Smells, Vulnerabilities)
+- Security Hotspots
+- Quality Gate als Check im Pull Request
+
+Konfiguration: `sonar-project.properties` im Projektroot.
+
+## REST API
+
+| Methode | Endpoint | Beschreibung |
+|---------|----------|-------------|
+| POST | `/api/auth/register` | Benutzer registrieren |
+| POST | `/api/auth/login` | Benutzer anmelden |
+| GET | `/actuator/health` | Health Check |
+| GET | `/symbols` | Verfügbare Aktien |
+| GET | `/quotes?symbol=AAPL` | Aktienkurs abfragen |
+| POST | `/accounts` | Trading-Konto erstellen |
+| GET | `/accounts/{id}` | Konto-Übersicht |
+| GET | `/accounts/{id}/positions` | Offene Positionen |
+| POST | `/accounts/{id}/orders` | Order aufgeben |
+| GET | `/accounts/{id}/orders` | Order-Historie |
+| GET | `/accounts/{id}/fills` | Ausgeführte Trades |
+
+**Verfügbare Symbole:** AAPL · MSFT · GOOGL · AMZN · TSLA · NVDA · META · JPM
+
+## Projektstruktur
+
+```
+Trading_Simulator/
+├── .github/workflows/
+│   └── ci-cd.yml                  CI/CD Pipeline
+├── backend/                       Spring Boot 3.4 + Java 17
+│   ├── Dockerfile                 Container-Image für Backend
+│   ├── pom.xml                    Maven Dependencies
 │   └── src/
 │       ├── main/java/com/tradex/
-│       │   ├── TradingSimulatorApplication.java   Entry point
-│       │   ├── config/
-│       │   │   ├── BrokerConfig.java              Broker settings
-│       │   │   └── CorsConfig.java                CORS filter
-│       │   ├── controller/
-│       │   │   ├── AccountController.java         Account/order/fill endpoints
-│       │   │   └── MarketController.java          Symbols/quotes endpoints
-│       │   ├── model/
-│       │   │   ├── Account.java                   Internal account entity
-│       │   │   ├── AccountSummary.java            Account response DTO
-│       │   │   ├── CreateAccountRequest.java      Request DTO
-│       │   │   ├── Fill.java                      Trade execution record
-│       │   │   ├── Order.java                     Order entity
-│       │   │   ├── OrderRequest.java              Request DTO
-│       │   │   ├── Position.java                  Position response DTO
-│       │   │   └── Quote.java                     Market quote DTO
-│       │   └── service/
-│       │       ├── BrokerService.java             Trading engine
-│       │       ├── MarketDataService.java         Interface
-│       │       └── ReplayMarketDataService.java   Historical data replay
-│       ├── main/resources/
-│       │   ├── application.properties             Server + broker config
-│       │   └── replay-quotes.json                 Stock price dataset
-│       └── test/java/com/tradex/
-│           └── TradingSimulatorApiTests.java      Integration tests
-│
-├── frontend/                          Vite + React 18 + TypeScript
-│   ├── index.html                     HTML shell
-│   ├── package.json                   Node dependencies
-│   ├── tsconfig.json                  TypeScript config
-│   ├── vite.config.ts                 Vite + proxy config
+│       │   ├── controller/        REST Controller (Auth, Account, Market)
+│       │   ├── model/             JPA Entities + DTOs
+│       │   ├── service/           Business Logic (Broker, MarketData)
+│       │   └── config/            CORS, Broker-Konfiguration
+│       └── test/                  Integration Tests
+├── frontend/                      React + TypeScript + Vite
+│   ├── Dockerfile                 Dev Container-Image
+│   ├── Dockerfile.prod            Produktions-Image (Nginx)
+│   ├── nginx.conf                 Nginx Reverse Proxy Config
 │   └── src/
-│       ├── main.tsx                   Entry point
-│       ├── app/App.tsx                Dashboard shell
-│       ├── components/
-│       │   ├── AccountSummary.tsx     Equity/P&L metrics bar
-│       │   ├── OrderEntry.tsx         Buy/sell order form
-│       │   ├── PositionsTable.tsx     Positions/orders/fills tabs
-│       │   ├── QuotePanel.tsx         Stock watchlist
-│       │   └── StatusBar.tsx          Header status
-│       ├── lib/api.ts                 REST API client
-│       └── styles/index.css           Dark trading terminal theme
-│
-├── package.json                       Root scripts
-├── .gitignore
-└── README.md
+│       ├── app/                   Login, Dashboard, Routing
+│       ├── components/            UI-Komponenten (Orders, Quotes, Positions)
+│       ├── state/                 Auth State Management
+│       └── styles/                Dark Trading Terminal Theme
+├── docker-compose.yml             4-Container Setup (lokal)
+├── init.sql                       Datenbank-Schema + Testdaten
+└── sonar-project.properties       SonarCloud Konfiguration
 ```
 
-## REST API Endpoints
-
-| Method | Endpoint                    | Description              |
-|--------|-----------------------------|--------------------------|
-| GET    | `/actuator/health`          | Spring Actuator health   |
-| GET    | `/symbols`                  | List stock symbols       |
-| GET    | `/quotes?symbol=AAPL`       | Get bid/ask/mid quote    |
-| POST   | `/accounts`                 | Create trading account   |
-| GET    | `/accounts/{id}`            | Account summary          |
-| GET    | `/accounts/{id}/positions`  | Open positions           |
-| POST   | `/accounts/{id}/orders`     | Place market order       |
-| GET    | `/accounts/{id}/orders`     | Order history            |
-| GET    | `/accounts/{id}/fills`      | Trade fills              |
-
-### Quick API Test (with curl)
-
-```bash
-# Health check
-curl http://localhost:8080/actuator/health
-
-# Get quote
-curl "http://localhost:8080/quotes?symbol=AAPL"
-
-# Create account
-curl -X POST http://localhost:8080/accounts \
-  -H "Content-Type: application/json" \
-  -d '{"initialCapital": 100000}'
-
-# Buy 10 AAPL (replace YOUR_ACCOUNT_ID)
-curl -X POST http://localhost:8080/accounts/YOUR_ACCOUNT_ID/orders \
-  -H "Content-Type: application/json" \
-  -d '{"symbol":"AAPL","side":"BUY","quantity":10}'
-```
-
-## Broker Configuration
-
-Edit `backend/src/main/resources/application.properties`:
-
-```properties
-server.port=8080
-broker.commission-per-trade=1.50
-broker.fee-rate-bps=1
-broker.base-spread-bps=8
-broker.base-slippage-bps=2
-broker.random-slippage-bps=4
-broker.size-impact-bps=0.3
-```
-
-## Running Tests
+## Tests ausführen
 
 ```bash
 cd backend
 ./mvnw test
 ```
-
-## Available Symbols
-
-AAPL · MSFT · GOOGL · AMZN · TSLA · NVDA · META · JPM
 
 ## Contributors
 
