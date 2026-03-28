@@ -229,41 +229,51 @@ jobs:
   #   - Kubernetes/ArgoCD Deployment auslösen
   # ═══════════════════════════════════════════════════════════════════════════
   deploy:
-    name: Deploy
-    needs: [backend-ci, frontend-ci]     # Wartet auf beide CI-Jobs
+    name: Deploy to Cloud Run
+    needs: [backend-ci, frontend-ci]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    environment: production              # GitHub Environment für Secrets/Approvals
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
-      # ── Schritt 1: Backend-Artefakt herunterladen ─────────────────────────
-      # Lädt das JAR aus Job 1 herunter
-      - name: Download backend JAR
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-jar
-          path: artifacts/backend
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # ── Schritt 2: Frontend-Artefakt herunterladen ────────────────────────
-      # Lädt den dist/-Ordner aus Job 2 herunter
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
         with:
-          name: frontend-dist
-          path: artifacts/frontend
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      # ── Schritt 3: Deployment durchführen ─────────────────────────────────
-      # Aktuell nur Platzhalter – zeigt die verfügbaren Artefakte.
-      # In Produktion würde man hier die Dateien auf den Server kopieren.
-      - name: Deploy
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker europe-west10-docker.pkg.dev
+
+      - name: Build and push backend
         run: |
-          echo "========================================="
-          echo "  Deployment-Artefakte bereit"
-          echo "========================================="
-          echo "Backend JAR:    $(ls artifacts/backend/)"
-          echo "Frontend dist:  $(ls artifacts/frontend/ | head -5)"
-          echo ""
-          echo "Deployment-Schritte (Beispiel):"
-          echo "  scp artifacts/backend/*.jar user@host:/opt/tradex/"
-          echo "  rsync -av artifacts/frontend/ user@host:/var/www/tradex/"
-          echo "  ssh user@host 'systemctl restart tradex'"
+          docker build -t europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }} ./backend
+          docker push europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }}
+
+      - name: Deploy backend
+        run: |
+          gcloud run deploy tradesimx-backend \
+            --image=europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }} \
+            --region=europe-west10 \
+            --platform=managed
+
+      - name: Build and push frontend
+        run: |
+          cp frontend/Dockerfile.prod frontend/Dockerfile.cloud
+          docker build -f frontend/Dockerfile.cloud -t europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }} ./frontend
+          docker push europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }}
+
+      - name: Deploy frontend
+        run: |
+          gcloud run deploy tradesimx-frontend \
+            --image=europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }} \
+            --region=europe-west10 \
+            --platform=managed
