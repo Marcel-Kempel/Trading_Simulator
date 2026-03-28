@@ -62,7 +62,7 @@ export function Login() {
 
         <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
           <h2 className="text-[22px] font-semibold text-foreground tracking-tight text-center mb-2">
-            {mode === "login" ? "Hallo willkommen zurueck!" : "Jetzt Konto erstellen"}
+            {mode === "login" ? "Willkommen zurueck" : "Konto erstellen"}
           </h2>
           <p className="text-[14px] text-muted-foreground text-center mb-8">
             {mode === "login" ? "Melde dich an um dein Portfolio zu verwalten" : "Registriere dich fuer den Trading Simulator"}
