@@ -10,7 +10,7 @@ name: CI/CD Pipeline
 # ─────────────────────────────────────────────────────────────────────────────
 # TRIGGER: Wann soll die Pipeline laufen?
 # ─────────────────────────────────────────────────────────────────────────────
-# - Bei jedem Push auf main, master oder claude/** Branches
+# - Bei jedem Push auf main, master Branches
 # - Bei jedem Pull Request gegen main oder master
 # So wird sichergestellt, dass kein fehlerhafter Code in den Hauptbranch gelangt.
 on:
@@ -214,63 +214,105 @@ jobs:
           path: frontend/dist/
           retention-days: 7
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # JOB 3: DEPLOY – Bereitstellung (nur auf main/master)
+ # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3: DEPLOY – Google Cloud Run (nur auf main/master)
   # ═══════════════════════════════════════════════════════════════════════════
   # Dieser Job:
   #   - Läuft NUR wenn backend-ci UND frontend-ci erfolgreich waren (needs)
   #   - Läuft NUR auf main/master Branch (nicht auf Feature-Branches)
-  #   - Lädt die Artefakte (JAR + dist/) herunter
-  #   - Stellt sie zur Deployment bereit
+  #   - Authentifiziert sich bei Google Cloud via Workload Identity Federation
+  #   - Baut Docker Images und pusht sie in die Artifact Registry
+  #   - Deployed Backend und Frontend auf Google Cloud Run
   #
-  # In einer echten Produktionsumgebung würde hier z.B. stehen:
-  #   - SSH auf den Server und JAR deployen
-  #   - Docker Image bauen und in eine Registry pushen
-  #   - Kubernetes/ArgoCD Deployment auslösen
+  # Cloud Run ist ein serverloser Container-Dienst von Google Cloud.
+  # Er startet Container automatisch bei eingehenden Requests und
+  # skaliert auf 0 wenn keine Requests kommen (kostenlos im Idle).
   # ═══════════════════════════════════════════════════════════════════════════
   deploy:
     name: Deploy to Cloud Run
     needs: [backend-ci, frontend-ci]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    # ── Berechtigungen für Workload Identity Federation ────────────────────
+    # contents: read  → erlaubt das Auschecken des Repos
+    # id-token: write → erlaubt das Erstellen eines OIDC-Tokens
+    #                    das an Google Cloud gesendet wird zur Authentifizierung
     permissions:
       contents: read
       id-token: write
 
     steps:
+      # ── Schritt 1: Code auschecken ────────────────────────────────────────
+      # Klont das Repository, damit die Dockerfiles verfügbar sind
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ── Schritt 2: Google Cloud Authentifizierung ─────────────────────────
+      # Workload Identity Federation: GitHub Actions authentifiziert sich
+      # bei Google Cloud OHNE einen gespeicherten JSON-Key.
+      # Stattdessen wird ein kurzlebiger OIDC-Token von GitHub erstellt
+      # und gegen Google Cloud-Credentials eingetauscht.
+      # Dies ist die sicherste Methode für CI/CD → Cloud Authentifizierung.
       - name: Google Auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
+      # ── Schritt 3: Google Cloud SDK installieren ──────────────────────────
+      # Installiert die gcloud CLI, die für Docker-Push und
+      # Cloud Run Deployment benötigt wird.
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-
+        
+      # ── Schritt 4: Docker für Artifact Registry konfigurieren ─────────────
+      # Konfiguriert Docker so, dass es Images in die Google Artifact Registry
+      # pushen kann. Artifact Registry ist Googles Container-Image-Speicher
+      # (vergleichbar mit Docker Hub, aber privat und in der Cloud).
       - name: Configure Docker
         run: gcloud auth configure-docker europe-west10-docker.pkg.dev
 
+      # ── Schritt 5: Backend Docker Image bauen und pushen ──────────────────
+      # Baut das Spring Boot Backend als Docker Image.
+      # Das Image wird mit dem Git-Commit-SHA getaggt (${{ github.sha }}),
+      # sodass jede Version eindeutig identifizierbar ist.
+      # Anschließend wird das Image in die Artifact Registry hochgeladen.
       - name: Build and push backend
         run: |
           docker build -t europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }} ./backend
           docker push europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }}
 
+      # ── Schritt 6: Backend auf Cloud Run deployen ─────────────────────────
+      # Deployed das neue Backend-Image auf Google Cloud Run.
+      # Cloud Run erkennt das neue Image und erstellt eine neue Revision.
+      # Der Traffic wird automatisch auf die neue Revision umgeleitet.
+      # Die bestehenden Environment-Variablen (DB-Verbindung etc.)
+      # bleiben erhalten und müssen nicht erneut gesetzt werden.
       - name: Deploy backend
         run: |
           gcloud run deploy tradesimx-backend \
             --image=europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }} \
             --region=europe-west10 \
             --platform=managed
-
+      
+      # ── Schritt 7: Frontend Docker Image bauen und pushen ─────────────────
+      # Baut das React Frontend mit einem Multi-Stage Dockerfile:
+      #   Stage 1: Node.js baut die React-App (npm ci + vite build)
+      #   Stage 2: Nginx serviert die statischen Dateien (HTML, JS, CSS)
+      # Das Ergebnis ist ein schlankes Nginx-Image (~30MB statt ~1GB).
+      # Dockerfile.prod enthält die Produktions-Konfiguration mit Nginx
+      # als Reverse Proxy, der API-Aufrufe an das Backend weiterleitet.
       - name: Build and push frontend
         run: |
           cp frontend/Dockerfile.prod frontend/Dockerfile.cloud
           docker build -f frontend/Dockerfile.cloud -t europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }} ./frontend
           docker push europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }}
 
+      # ── Schritt 8: Frontend auf Cloud Run deployen ────────────────────────
+      # Deployed das neue Frontend-Image auf Google Cloud Run.
+      # Das Frontend ist unter einer eigenen URL erreichbar und leitet
+      # /api/* Requests über Nginx an das Backend weiter.
+      # Nach erfolgreichem Deployment ist die neue Version sofort live.
       - name: Deploy frontend
         run: |
           gcloud run deploy tradesimx-frontend \
