@@ -134,13 +134,6 @@ export function Login() {
             className="w-full mt-6 py-3.5 rounded-xl font-semibold text-[15px] text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-600 hover:via-purple-600 hover:to-indigo-700 shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? "Laden..." : mode === "login" ? "Anmelden" : "Registrieren"}
           </button>
-
-          <div className="mt-6 p-4 bg-accent rounded-xl">
-            <p className="text-[12px] text-muted-foreground text-center">
-              <span className="font-semibold text-foreground">Demo-Zugang:</span>{" "}
-              Nope@example.com / Test
-            </p>
-          </div>
         </div>
       </div>
     </div>
