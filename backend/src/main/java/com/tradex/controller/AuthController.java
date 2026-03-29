@@ -6,7 +6,7 @@ import com.tradex.model.User;
 import com.tradex.repository.UserRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.Map;
+import java.util.Map
 
 @RestController
 @RequestMapping("/auth")
