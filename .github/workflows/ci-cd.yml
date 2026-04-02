@@ -279,8 +279,8 @@ jobs:
       # Anschließend wird das Image in die Artifact Registry hochgeladen.
       - name: Build and push backend
         run: |
-          docker build -t europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }} ./backend
-          docker push europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }}
+          docker build -t europe-west10-docker.pkg.dev/project-84ecb9e4-ae8e-4473-a8b/tradesimx/backend:${{ github.sha }} ./backend
+          docker push europe-west10-docker.pkg.dev/project-84ecb9e4-ae8e-4473-a8b/tradesimx/backend:${{ github.sha }}
 
       # ── Schritt 6: Backend auf Cloud Run deployen ─────────────────────────
       # Deployed das neue Backend-Image auf Google Cloud Run.
@@ -291,7 +291,7 @@ jobs:
       - name: Deploy backend
         run: |
           gcloud run deploy tradesimx-backend \
-            --image=europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/backend:${{ github.sha }} \
+            --image=europe-west10-docker.pkg.dev/project-84ecb9e4-ae8e-4473-a8b/tradesimx/backend:${{ github.sha }} \
             --region=europe-west10 \
             --platform=managed
       
@@ -304,9 +304,8 @@ jobs:
       # als Reverse Proxy, der API-Aufrufe an das Backend weiterleitet.
       - name: Build and push frontend
         run: |
-          cp frontend/Dockerfile.prod frontend/Dockerfile.cloud
-          docker build -f frontend/Dockerfile.cloud -t europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }} ./frontend
-          docker push europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }}
+          docker build -f frontend/Dockerfile.prod -t europe-west10-docker.pkg.dev/project-84ecb9e4-ae8e-4473-a8b/tradesimx/frontend:${{ github.sha }} ./frontend
+          docker push europe-west10-docker.pkg.dev/project-84ecb9e4-ae8e-4473-a8b/tradesimx/frontend:${{ github.sha }}
 
       # ── Schritt 8: Frontend auf Cloud Run deployen ────────────────────────
       # Deployed das neue Frontend-Image auf Google Cloud Run.
@@ -316,6 +315,6 @@ jobs:
       - name: Deploy frontend
         run: |
           gcloud run deploy tradesimx-frontend \
-            --image=europe-west10-docker.pkg.dev/project-710ad3c2-509c-401e-a18/tradesimx/frontend:${{ github.sha }} \
+            --image=europe-west10-docker.pkg.dev/project-84ecb9e4-ae8e-4473-a8b/tradesimx/frontend:${{ github.sha }} \
             --region=europe-west10 \
             --platform=managed
