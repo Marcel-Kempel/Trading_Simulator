@@ -52,11 +52,7 @@ npm run dev
 ## Cloud Deployment
 
 Die Anwendung läuft produktiv auf **Google Cloud Run**:
-
-| Service | URL |
-|---------|-----|
-| Frontend | https://tradesimx-frontend-720693733401.europe-west10.run.app |
-| Backend | https://tradesimx-backend-720693733401.europe-west10.run.app |
+https://tradesimx-frontend-246532816778.europe-west10.run.app
 
 ### Architektur
 
